@@ -3,10 +3,14 @@ import re
 import urllib
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
+web_root_dir = None
+
 
 class HttpServer(object):
-    def __init__(self, address='', port=8282, path=None):
+    def __init__(self, address='', port=8282, directory=None):
         self.server_address = (address, port)
+        global web_root_dir
+        web_root_dir = directory
 
     def serve_forever(self):
         http_server = HTTPServer(self.server_address, RequestHandler)
@@ -32,7 +36,7 @@ def _copy_range(infile, outfile, start, end):
         outfile.write(buf)
 
 
-def _parse_range_bytes(range_bytes):
+def parse_range_bytes(range_bytes):
     if range_bytes == '':
         return None, None
 
@@ -54,14 +58,14 @@ def _parse_range_bytes(range_bytes):
 
 class RequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, directory=web_root_dir, **kwargs)
 
     def send_head(self):
         if 'Range' not in self.headers:
             self.range = None
             return super().send_head()
         try:
-            self.range = _parse_range_bytes(self.headers['Range'])
+            self.range = parse_range_bytes(self.headers['Range'])
         except ValueError as e:
             self.send_error(416, 'Requested Range Not Satisfiable')
             return None
