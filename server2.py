@@ -1,39 +1,34 @@
+import http
 import os
 import re
+import socketserver
 import urllib
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 web_root_dir = None
 
 
-class HttpServer(object):
+class HttpServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def __init__(self, address='', port=8282, directory=None):
-        self.server_address = (address, port)
+        super().__init__((address, port), RequestHandler)
         global web_root_dir
         web_root_dir = directory
-
-    def serve_forever(self):
-        http_server = HTTPServer(self.server_address, RequestHandler)
-        http_server.serve_forever()
 
 
 RANGE_BYTES_RE = re.compile(r'bytes=(\d*)-(\d*)?\Z')
 
+COPY_BUF_SIZE = 64 * 1024
 
-def copy_range(infile, outfile, start, end):
-    buf_size = 16 * 1024
+
+def copyfileobj(file_src, file_dst, start=None):
     if start is not None:
-        infile.seek(start)
+        file_src.seek(start)
+    length = COPY_BUF_SIZE
     while True:
-        size = buf_size
-        if end is not None:
-            left = end - infile.tell()
-            if left < size:
-                size = left
-        buf = infile.read(size)
+        buf = file_src.read(length)
         if not buf:
             break
-        outfile.write(buf)
+        file_dst.write(buf)
 
 
 def parse_range_bytes(range_bytes):
@@ -104,10 +99,14 @@ class RequestHandler(SimpleHTTPRequestHandler):
 
     def copyfile(self, source, outputfile):
         try:
-            if not self.range:
-                return super().copyfile(source, outputfile)
-
-            start, end = self.range
-            copy_range(source, outputfile, start, end)
+            if self.range is not None:
+                start, end = self.range
+                source.seek(start)
+            # copy_range(source, outputfile, start, end)
+            # copyfileobj(source, outputfile, start)
+            return super().copyfile(source, outputfile)
         except BrokenPipeError:
+            pass
+        except ConnectionResetError:
+            # 链接失败
             pass
