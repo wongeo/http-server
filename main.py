@@ -1,15 +1,16 @@
-import os
 import sys
 
-from server import HttpServer as Server1
-from server2 import HttpServer as Server2
+from server3 import HttpServer as Server
 
 
 def main():
-    path = sys.argv[1]
-    # server = Server1("127.0.0.1", 3000)
-    server = Server2("", 3000, path)
-    server.serve_forever()
+    args = sys.argv
+    path = args[1]
+    address = ""
+    if len(args) >= 2:
+        address = args[2]
+    server = Server(address, 3000, path)
+    server.start()
 
 
 if __name__ == '__main__':
