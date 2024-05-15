@@ -9,7 +9,7 @@ def main():
     address = ""
     if len(args) >= 2:
         address = args[2]
-    server = Server(address, 3000, path)
+    server = Server(address, 8080, path)
     server.start()
 
 
