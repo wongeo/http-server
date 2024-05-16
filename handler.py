@@ -89,7 +89,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
             self.send_error(HTTPStatus.NOT_FOUND, "No permission to list directory")
             return None
         name_list.sort(key=lambda a: a.lower())
-        result = []
+        json_array = []
         for name in name_list:
             fullname = os.path.join(path, name)
             if os.path.isdir(fullname):
@@ -99,8 +99,9 @@ class RequestHandler(SimpleHTTPRequestHandler):
             else:
                 continue
             url = f"{self.domain}/{m}{name}"
-            result.append({"name": name, "url": url, "type": file_type})
+            json_array.append({"name": name, "url": url, "type": file_type})
         enc = sys.getfilesystemencoding()
+        result = {"data": json_array}
         jsonobj = json.dumps(result)
         encoded = jsonobj.encode(enc, 'surrogateescape')
         f = io.BytesIO()
