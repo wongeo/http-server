@@ -81,6 +81,9 @@ class RequestHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def list_directory(self, path):
+        user_agent = self.headers['User-Agent']
+        if "okhttp" not in user_agent:
+            return super().list_directory(path)
         match = re.search(r'\\(.*)', path.replace(self.web_root_dir, ""))
         m = match.group(1) if match else ""
         try:
