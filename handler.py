@@ -1,3 +1,4 @@
+import glob
 import io
 import json
 import os
@@ -88,25 +89,19 @@ class RequestHandler(SimpleHTTPRequestHandler):
             return super().list_directory(path)
 
     def list_directory_json(self, path):
-        match = re.search(r'\\(.*)', path.replace(self.web_root_dir, ""))
-        m = match.group(1) if match else ""
         try:
-            name_list = os.listdir(path)
+            mp4_files = glob.glob(os.path.join(path, '**', '*.mp4'), recursive=True)
         except OSError:
             self.send_error(HTTPStatus.NOT_FOUND, "No permission to list directory")
             return None
-        name_list.sort(key=lambda a: a.lower())
         json_array = []
-        for name in name_list:
-            fullname = os.path.join(path, name)
-            if os.path.isdir(fullname):
-                file_type = "dir"
-            elif os.path.isfile(fullname) and fullname.endswith(".mp4"):
-                file_type = "mp4"
-            else:
+        for full_path in mp4_files:
+            name = full_path.replace(self.web_root_dir, "").replace("\\", "/")
+            if name in json_array:
                 continue
-            url = f"{self.domain}/{m}{name}"
-            json_array.append({"name": name, "url": url, "type": file_type})
+            else:
+                url = f"{self.domain}/{name}"
+                json_array.append({"name": name, "url": url, "type": "mp4"})
         enc = sys.getfilesystemencoding()
         result = {"data": json_array}
         jsonobj = json.dumps(result)
