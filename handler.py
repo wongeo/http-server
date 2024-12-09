@@ -1,9 +1,11 @@
 import glob
+import html
 import io
 import json
 import os
 import re
 import sys
+import urllib
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler
 
@@ -86,7 +88,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
         if "okhttp" in user_agent:
             return self.list_directory_json(path)
         else:
-            return super().list_directory(path)
+            return self.list_directory_web(path)
 
     def list_directory_json(self, path):
         try:
@@ -115,6 +117,60 @@ class RequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         return f
 
+    def list_directory_web(self, path):
+        try:
+            list = get_files_with_extensions(path, ".mp4")
+        except OSError:
+            self.send_error(
+                HTTPStatus.NOT_FOUND,
+                "No permission to list directory")
+            return None
+        list.sort(key=lambda a: a.lower())
+        r = []
+        try:
+            displaypath = urllib.parse.unquote(self.path, errors='surrogatepass')
+        except UnicodeDecodeError:
+            displaypath = urllib.parse.unquote(path)
+        displaypath = html.escape(displaypath, quote=False)
+        enc = sys.getfilesystemencoding()
+        title = 'Directory listing for %s' % displaypath
+        r.append('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" '
+                 '"http://www.w3.org/TR/html4/strict.dtd">')
+        r.append('<html>')
+        r.append('<head>')
+        r.append(f'<meta http-equiv="Content-Type" content="text/html; charset={enc}">')
+        r.append(f'<title>{title}</title>')
+        r.append('</head>')
+        r.append('<body>')
+        r.append(f'<h1>{title}</h1>')
+        r.append('<hr>')
+        r.append('<ul>')
+        for name in list:
+            fullname = os.path.join(path, name)
+            displayname = linkname = name
+            # Append / for directories or @ for symbolic links
+            if os.path.isdir(fullname):
+                displayname = name + "/"
+                linkname = name + "/"
+            if os.path.islink(fullname):
+                displayname = name + "@"
+                # Note: a link to a directory displays with @ and links with /
+            r.append('<li><a href="%s">%s</a></li>' % (
+                urllib.parse.quote(linkname, errors='surrogatepass'), html.escape(displayname, quote=False)))
+        r.append('</ul>')
+        r.append('<hr>')
+        r.append('</body>')
+        r.append('</html>')
+        encoded = '\n'.join(r).encode(enc, 'surrogateescape')
+        f = io.BytesIO()
+        f.write(encoded)
+        f.seek(0)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-type", "text/html; charset=%s" % enc)
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        return f
+
     def copyfile(self, source: io.BytesIO, outputfile):
         try:
             if self.range is not None:
@@ -128,3 +184,22 @@ class RequestHandler(SimpleHTTPRequestHandler):
             pass
         except ConnectionAbortedError:
             print("终端链接断开")
+
+
+def get_files_with_extensions(path, extensions):
+    """
+    获取指定路径下所有具有指定后缀之一的文件。
+
+    参数:
+    path (str): 要搜索的目录路径。
+    extensions (list): 文件后缀列表，例如 ['.txt', '.csv']。
+
+    返回:
+    list: 包含符合条件的文件名的列表。
+    """
+    files = []
+    for item in os.listdir(path):
+        full_path = os.path.join(path, item)
+        if os.path.isdir(full_path) or any(item.endswith(ext) for ext in extensions):
+            files.append(item)
+    return files
